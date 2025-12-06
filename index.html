@@ -785,8 +785,8 @@
             let bestGlobalLayout = null;
             let bestGlobalDiff = Infinity;
             
-            const RESTARTS = 10;
-            const ITERATIONS = 1000; 
+            const RESTARTS = 15;
+            const ITERATIONS = 1200; 
 
             for(let restart=0; restart < RESTARTS; restart++) {
                 
@@ -822,31 +822,34 @@
     }
 
     function getDiff(layout, stats, tv, tm, th, tc, tl) {
-        // Primary Penalty: Distance from Target
+        // 1. PRIMARY: Match Stats (Weights ~1.0)
         let statPenalty = Math.abs(stats.v - tv) + 
                           Math.abs(stats.m - tm) + 
                           Math.abs(stats.h - th) + 
                           Math.abs(stats.c - tc) + 
                           Math.abs(stats.l - tl);
 
-        // Secondary Penalty: Gem Cost (Higher level = tiny penalty)
-        // We want optimizer to prefer Lv 5 over Lv 7 if stats match.
-        // Penalty: (Level - 5) * 0.00001
+        // 2. SECONDARY: Minimize Gem Levels (Weight ~0.0001)
+        // Prefer level 5 over level 7 if stats are met
         let gemLevelPenalty = 0;
         layout.gears.forEach(g => {
             if(g && g.gLvl) {
-                gemLevelPenalty += (g.gLvl - 5) * 0.00001; 
+                gemLevelPenalty += (g.gLvl - 5) * 0.0001; 
             }
         });
 
-        // Tertiary Penalty: Variety Cost (Different colors = tiny penalty)
-        // We want optimizer to prefer uniform colors if stats match.
-        let colors = new Set();
+        // 3. TERTIARY: Maximize Uniformity (Weight ~0.00001)
+        // Count frequencies of gem colors
+        let colorCounts = {};
+        let maxCount = 0;
         layout.gears.forEach(g => {
-            if(g && g.g) colors.add(g.g);
+            if(g && g.g) {
+                colorCounts[g.g] = (colorCounts[g.g] || 0) + 1;
+                if(colorCounts[g.g] > maxCount) maxCount = colorCounts[g.g];
+            }
         });
-        // 1 color = 0 penalty. 4 colors = max penalty.
-        let varietyPenalty = (colors.size - 1) * 0.00001;
+        // Total slots is 11. Penalty decreases as maxCount increases.
+        let varietyPenalty = (11 - maxCount) * 0.00001;
 
         return statPenalty + gemLevelPenalty + varietyPenalty;
     }
@@ -959,6 +962,7 @@
         let slotName = GEAR_SLOTS[idx];
 
         // Aspects: 0=P, 1=S, 2=R, 3=GemColor, 4=GemLvl
+        // If Raid, cannot change P or S
         let validAspects = [2, 3, 4];
         if (!gear.isLocked && !gear.isRaid) {
             validAspects.push(0, 1);
@@ -1086,7 +1090,7 @@
             let v1=0, v2=0, v3=0;
             if(slot === "Weapon") {
                 if(isRaid) { v1 = 384; v2 = 384; v3 = 0; } 
-                else { v1 = 236; v2 = 118; v3 = 70; }
+                else { v1 = 400; v2 = 200; v3 = 120; }
             } else if (isRaid) {
                 v1 = 200; v2 = 200; v3 = 60;
             } else {
